@@ -1,0 +1,9 @@
+# docker build -f ./Dockerfile.txt -t bfm_face_profilling .
+FROM gaetanlandreau/pytorch3d
+RUN python3.8 -m pip install chumpy h5py opencv-python h5py fvcore
+
+RUN apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A4B469963BF863CC && \
+    apt-get update && apt-get install -y libboost-dev
+WORKDIR /
+RUN git clone https://github.com/MPI-IS/mesh.git  
+RUN cd mesh && python3.8 -m pip install .

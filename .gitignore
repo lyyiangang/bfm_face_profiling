@@ -1,0 +1,4 @@
+__pycache__/
+fitted_model
+aug_results/
+outputs/
