@@ -64,24 +64,26 @@ class ImageRenderer(nn.Module):
         return {'rotate_images':results}
 
 if __name__ == "__main__":
-    
-    test_annot = "outputs/fitted_flame/AFW_AFW_18489332_7_7_4.jpg.obj.npy"
-    test_img ="data/AFW_AFW_18489332_7_7_4.jpg" 
-    image_size = 120
+    fitted_head = 'outputs/fitted_flame_head_model.npy'
+    aug_angles = torch.Tensor([60, 0, -50])[None,...]/180.0 * np.pi # rotation angles xyz
 
-    param = np.load(test_annot, allow_pickle=True)[()] # come from flame.py, param.shape:
-    head_vertices = torch.Tensor(param['verts0'])
+    meta_data = np.load(fitted_head, allow_pickle=True)[()] # come from flame.py, param.shape:
+    img = cv2.imread(meta_data['img_name'])
+    img_h, img_w = img.shape[:2]
+    assert img_h == img_w and img_h == 120, f'get img_h:{img_h}, img_w:{img_w}'
+    image_size = 120
+    head_vertices = torch.Tensor(meta_data['flame_head_model_verts'])
     print(f'npy.vertices.shape:{head_vertices.shape}') # [1, 3487, 3])
-    cam = torch.Tensor([[-0.01, -0.01, 0, 1, 0, 0.0]])
+    cam = torch.Tensor([[0, 0, 0, 1, 0, 0.0]])
     # original pos is in pixel coord system, we need convert it to camera coordinate system
     head_vertices[:, :, 0] -= image_size / 2
     head_vertices[:, :, 1] += image_size / 2
-    head_vertices[:, :, :] /= 60
+    head_vertices[:, :, :] /= image_size / 2
 
-    R = pytorch3d.transforms.euler_angles_to_matrix(cam[:,:3], "XYZ")
-    print(f'cam:{cam}, R:{R}')
+    # R = pytorch3d.transforms.euler_angles_to_matrix(cam[:,:3], "XYZ")
+    # print(f'cam:{cam}, R:{R}')
     images = []
-    image = cv2.resize(cv2.imread(test_img), (image_size, image_size)).astype(np.float32) / 255.
+    image = img.astype(np.float32) / 255.
     image = image[:, :, [2, 1, 0]].transpose(2, 0, 1)
     images.append(torch.from_numpy(image[None, :, :, :]))
     images = torch.cat(images, dim=0)
@@ -89,13 +91,10 @@ if __name__ == "__main__":
     mesh_file = './photometric_optimization/data/full.obj' # [3782, 3] # only use the facet data
     render = ImageRenderer(image_size, obj_filename=mesh_file)
 
-    angles = torch.Tensor([20, 20, 0])[None,...]/180.0 * np.pi # rotation angles xyz
     cam_new = cam.clone()
-    angles = torch.abs(angles)*torch.sign(cam_new[:,:3])
-    print(f'rot angles:{angles}')
-    cam_new[:,:3] = cam_new[:,:3]+angles
-    print(f'cam_new:{cam_new}')
-
+    # angles = torch.abs(angles)*torch.sign(cam_new[:,:3])
+    print(f'rot angles:{aug_angles}')
+    cam_new[:,:3] = cam_new[:,:3]+aug_angles
     ops = render(cam, head_vertices, images, cam_new)
 
     grids = {}
@@ -107,6 +106,6 @@ if __name__ == "__main__":
     grid_image = (grid.numpy().transpose(1, 2, 0).copy() * 255)[:, :, [2, 1, 0]]
     grid_image = np.minimum(np.maximum(grid_image, 0), 255).astype(np.uint8)
 
-    out_file = 'aug_results/result.jpg'
+    out_file = 'outputs/result.jpg'
     print(f'writing {out_file}')
     cv2.imwrite(out_file, grid_image)

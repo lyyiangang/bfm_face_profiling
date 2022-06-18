@@ -1,9 +1,24 @@
 # docker build -f ./Dockerfile.txt -t bfm_face_profilling .
 FROM gaetanlandreau/pytorch3d
-RUN python3.8 -m pip install chumpy h5py opencv-python h5py fvcore
+ENV PIPINSTALL python3.8 -m pip install -i  https://pypi.doubanio.com/simple/  --trusted-host pypi.doubanio.com 
+RUN $PIPINSTALL -U pip
+# RUN adduser -D dev
+# USER dev
+# WORKDIR /home/dev
 
 RUN apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A4B469963BF863CC && \
     apt-get update && apt-get install -y libboost-dev
+
+# RUN python -m venv /opt/venv
+# ENV PATH="/opt/venv/bin:$PATH"
+# RUN . /opt/venv/bin/activate
+
+RUN $PIPINSTALL  chumpy h5py opencv-python h5py fvcore pyrender --user
+
 WORKDIR /
-RUN git clone https://github.com/MPI-IS/mesh.git  
-RUN cd mesh && python3.8 -m pip install .
+RUN git clone https://gitee.com/duckoo/mesh.git  
+# libgl1-mesa-glx, libosmesa6
+RUN cd mesh && ${PIPINSTALL} . -i  https://pypi.doubanio.com/simple/  --trusted-host pypi.doubanio.com  --user
+RUN apt-get update && apt-get install --fix-missing libgl1-mesa-glx libosmesa6  python-opengl -y
+RUN ${PIPINSTALL} pyopengl
+# apt-utils

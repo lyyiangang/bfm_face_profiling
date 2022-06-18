@@ -1,6 +1,12 @@
 [submodule "BFM_to_FLAME"]
 	path = BFM_to_FLAME
 	url = https://github.com/TimoBolkart/BFM_to_FLAME.git
+	ignore = dirty
+
 [submodule "photometric_optimization"]
 	path = photometric_optimization
 	url = https://github.com/zengxianyu/photometric_optimization.git
+	ignore = dirty
+[submodule "3DDFA"]
+	path = 3DDFA
+	url = https://github.com/cleardusk/3DDFA.git

@@ -12,6 +12,7 @@ For comments or questions, please email us at flame@tue.mpg.de
 '''
 
 import os
+import cv2
 import numpy as np
 import chumpy as ch
 from psbody.mesh import Mesh
@@ -19,6 +20,11 @@ import sys
 sys.path.append('./BFM_to_FLAME')
 from smpl_webuser.serialization import load_model
 
+sys.path.append('./3DDFA')
+from utils.io import _load_cpu
+from utils.ddfa import reconstruct_vertex
+
+import scipy.io as sio
 import config
 import argparse
 from pathlib import Path
@@ -40,7 +46,7 @@ def convert_mesh(mesh, corr_setup):
     v = np.vstack((mesh.v, np.zeros_like(mesh.v)))
     return Mesh(corr_setup['mtx'].dot(v), corr_setup['f_out'])
 
-def convert_BFM_mesh_to_FLAME(FLAME_model_fname, BFM_mesh_fname, FLAME_out_fname):
+def fit_bfm_face_mesh_to_flame_head_model(bfm_face_mesh, FLAME_model_fname):
     '''
     Convert Basel Face Model mesh to a FLAME mesh
     \param FLAME_model_fname        path of the FLAME model
@@ -54,14 +60,6 @@ def convert_BFM_mesh_to_FLAME(FLAME_model_fname, BFM_mesh_fname, FLAME_out_fname
     w_shape = 1e-3
     w_exp = 1e-4
 
-    if not os.path.exists(os.path.dirname(FLAME_out_fname)):
-        os.makedirs(os.path.dirname(FLAME_out_fname))
-
-    if not os.path.exists(BFM_mesh_fname):
-        lg.info('BFM mesh not found %s' % BFM_mesh_fname)
-        return
-    BFM_mesh = Mesh(filename=BFM_mesh_fname)
-    # BFM_mesh.show()
     if not os.path.exists(FLAME_model_fname):
         lg.info('FLAME model not found %s' % FLAME_model_fname)
         return
@@ -75,17 +73,15 @@ def convert_BFM_mesh_to_FLAME(FLAME_model_fname, BFM_mesh_fname, FLAME_out_fname
     BFM2017_corr = cached_data['BFM2017_corr'].item()
     BFM2009_corr = cached_data['BFM2009_corr'].item()
     BFM2009_cropped_corr = cached_data['BFM2009_cropped_corr'].item()
-    # reverse coordiante system
-    BFM_mesh.v[:, 1] *= -1
     # exit()
-    if (2*BFM_mesh.v.shape[0] == BFM2017_corr['mtx'].shape[1]) and (BFM_mesh.f.shape[0] == BFM2017_corr['f_in'].shape[0]):
+    if (2*bfm_face_mesh.v.shape[0] == BFM2017_corr['mtx'].shape[1]) and (bfm_face_mesh.f.shape[0] == BFM2017_corr['f_in'].shape[0]):
         lg.info(f'using bfm 2017 model')
-        conv_mesh = convert_mesh(BFM_mesh, BFM2017_corr)
-    elif (2*BFM_mesh.v.shape[0] == BFM2009_corr['mtx'].shape[1]) and (BFM_mesh.f.shape[0] == BFM2009_corr['f_in'].shape[0]):
-        conv_mesh = convert_mesh(BFM_mesh, BFM2009_corr)
+        conv_mesh = convert_mesh(bfm_face_mesh, BFM2017_corr)
+    elif (2*bfm_face_mesh.v.shape[0] == BFM2009_corr['mtx'].shape[1]) and (bfm_face_mesh.f.shape[0] == BFM2009_corr['f_in'].shape[0]):
+        conv_mesh = convert_mesh(bfm_face_mesh, BFM2009_corr)
         lg.info(f'using bfm 2009 model')
-    elif (2*BFM_mesh.v.shape[0] == BFM2009_cropped_corr['mtx'].shape[1]) and (BFM_mesh.f.shape[0] == BFM2009_cropped_corr['f_in'].shape[0]):
-        conv_mesh = convert_mesh(BFM_mesh, BFM2009_cropped_corr) # (5023, 3), conv_mesh is simillar with flame head model
+    elif (2*bfm_face_mesh.v.shape[0] == BFM2009_cropped_corr['mtx'].shape[1]) and (bfm_face_mesh.f.shape[0] == BFM2009_cropped_corr['f_in'].shape[0]):
+        conv_mesh = convert_mesh(bfm_face_mesh, BFM2009_cropped_corr) # (5023, 3), conv_mesh is simillar with flame head model
         lg.info(f'using bfm 2009 cropped model')
     else:
         lg.info('Conversion failed - input mesh does not match any setup')
@@ -109,20 +105,43 @@ def convert_BFM_mesh_to_FLAME(FLAME_model_fname, BFM_mesh_fname, FLAME_out_fname
     # Mesh(v_out, flame_head_model.f).write_obj(FLAME_out_fname)
 
     facefp_mesh = load_facefp_head_model(v_out, flame_head_model.f)
-    # facefp_mesh.write_obj('facefp.obj')
-
-    param = {}
-    param['verts0'] = facefp_mesh.v[None, :, :]
-    lg.info(f'saving {FLAME_out_fname}')
-    np.save(FLAME_out_fname, param, allow_pickle= True)
+    return facefp_mesh
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='convert 300wlp model to flame head model')
-    parser.add_argument('--obj', type=str, default ='./data/AFW_AFW_18489332_7_7_4.jpg.obj',  help='obj file')
-    parser.add_argument('--output', type=str, default ='',  help='where to save fitted result')
-    
-    args = parser.parse_args()
-    if args.output == '':
-        output = 'outputs/fitted_flame/' + Path(args.obj).name + '.npy'
-    convert_BFM_mesh_to_FLAME(config.flame_head_model,args.obj , output)
+    output = 'outputs/fitted_flame_head_model.npy'
+    os.makedirs(Path(output).parent, exist_ok= True)
+
+    test_img_name = 'LFPWFlip_LFPW_image_train_0812_0_10.jpg'     
+    dataset_root = '/home/lyy/486G/dataset/300wlp_mini'
+    img_root = os.path.join(dataset_root, 'train_aug_120x120') 
+    cfg_root = os.path.join(dataset_root, 'train.configs')
+
+    param_fp = os.path.join(cfg_root, 'param_all_norm_val.pkl')
+    filelists = os.path.join(cfg_root, 'train_aug_120x120.list.val')
+    lines = Path(filelists).read_text().strip().split('\n')
+    params = _load_cpu(param_fp)
+    tri = sio.loadmat('3DDFA/visualize/tri.mat')['tri']# index in tri starts from 1
+
+    idx = lines.index(test_img_name)
+    img_name = os.path.join(img_root, lines[idx])
+    param = params[idx]
+    vertices = reconstruct_vertex(param, dense = True)
+    face_mesh = Mesh(v = vertices.T, f = (tri-1).T)
+    # reverse coordiante system
+    face_mesh.v[:, 1] *= -1
+    face_mesh.show()
+
+    head_mesh = fit_bfm_face_mesh_to_flame_head_model(face_mesh, config.flame_head_model)
+    head_mesh.show()
+
+    out_param = {
+        'img_name' : img_name,
+        'param_3ddfa' : param,
+    }
+    out_param['flame_head_model_verts'] = head_mesh.v[None, :, :]
+    lg.info(f'saving {output}')
+    np.save(output, out_param, allow_pickle= True)
     lg.info('Conversion finished')
+    img = cv2.imread(img_name)
+    cv2.imshow('img', img)
+    cv2.waitKey(10)
