@@ -47,11 +47,12 @@ class ImageRenderer(nn.Module):
         attributes = face_vertices.detach()
         full_vertices, N_bd = get_full_verts(head_vertices) # add face contour boundary
         transformed_vertices = util.batch_orth_proj(full_vertices, cam_new) # rot head
-        transformed_vertices[..., 1:] = - transformed_vertices[..., 1:]
+        # import ipdb;ipdb.set_trace()
+        # to pixel coord
+        transformed_vertices[..., 1:] = -transformed_vertices[..., 1:]
         transformed_vertices[...,2] = transformed_vertices[...,2]+10 
 
         transformed_vertices = image_meshing(transformed_vertices, N_bd) # add img boundaries
-
         transformed_vertices[...,:2] = torch.clamp(transformed_vertices[...,:2], -1,1)
         rendering = self.rasterizer(transformed_vertices, self.faces.expand(batch_size, -1, -1), attributes)
 
@@ -65,20 +66,22 @@ class ImageRenderer(nn.Module):
 
 if __name__ == "__main__":
     fitted_head = 'outputs/fitted_flame_head_model.npy'
-    aug_angles = torch.Tensor([60, 0, -50])[None,...]/180.0 * np.pi # rotation angles xyz
+    aug_angles = torch.Tensor([0, -50, 0])[None,...]/180.0 * np.pi # rotation angles xyz
 
-    meta_data = np.load(fitted_head, allow_pickle=True)[()] # come from flame.py, param.shape:
+    meta_data = np.load(fitted_head, allow_pickle=True)[()] 
     img = cv2.imread(meta_data['img_name'])
     img_h, img_w = img.shape[:2]
     assert img_h == img_w and img_h == 120, f'get img_h:{img_h}, img_w:{img_w}'
     image_size = 120
     head_vertices = torch.Tensor(meta_data['flame_head_model_verts'])
     print(f'npy.vertices.shape:{head_vertices.shape}') # [1, 3487, 3])
-    cam = torch.Tensor([[0, 0, 0, 1, 0, 0.0]])
+    cam = torch.Tensor([[0, 0, 0, 1, 0, 0]])# rx,ry,rz,z, x,y
     # original pos is in pixel coord system, we need convert it to camera coordinate system
     head_vertices[:, :, 0] -= image_size / 2
     head_vertices[:, :, 1] += image_size / 2
     head_vertices[:, :, :] /= image_size / 2
+    # import ipdb;ipdb.set_trace()
+    head_vertices[:, :, 2:] -= head_vertices[:, :, 2].mean()
 
     # R = pytorch3d.transforms.euler_angles_to_matrix(cam[:,:3], "XYZ")
     # print(f'cam:{cam}, R:{R}')

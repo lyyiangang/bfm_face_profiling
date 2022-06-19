@@ -32,9 +32,7 @@ import logging
 lg = logging.getLogger(__name__)
 lg.setLevel(logging.INFO)
 
-def load_facefp_head_model(v, f):
-    trim_path = 'photometric_optimization/data/trim_verts_face.npz'
-    tp = np.load(trim_path, allow_pickle=True) # trim_path: 3487
+def load_facefp_head_model(v, f, tp):
     # tp['map_verts'] : (5023, )
     # tp['idx_faces'], (6860,)
     # tp['idx_verts'], (3487,)
@@ -53,6 +51,9 @@ def fit_bfm_face_mesh_to_flame_head_model(bfm_face_mesh, FLAME_model_fname):
     \param BFM_mesh_fname           path of the BFM mesh to be converted
     \param FLAME_out_fname          path of the output file
     '''
+
+    trim_path = 'photometric_optimization/data/trim_verts_face.npz'
+    tp = np.load(trim_path, allow_pickle=True) # trim_path: 3487
 
     # Regularizer weights for jaw pose (i.e. opening of mouth), shape, and facial expression.
     # Increase regularization in case of implausible output meshes. 
@@ -104,7 +105,7 @@ def fit_bfm_face_mesh_to_flame_head_model(bfm_face_mesh, FLAME_model_fname):
     v_out = flame_head_model.r/scale.r
     # Mesh(v_out, flame_head_model.f).write_obj(FLAME_out_fname)
 
-    facefp_mesh = load_facefp_head_model(v_out, flame_head_model.f)
+    facefp_mesh = load_facefp_head_model(v_out, flame_head_model.f, tp)
     return facefp_mesh
 
 if __name__ == '__main__':
