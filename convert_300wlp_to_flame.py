@@ -102,7 +102,10 @@ def fit_bfm_face_mesh_to_flame_head_model(bfm_face_mesh, FLAME_model_fname):
     lg.info(f'estimate expression')
     ch.minimize(obj, x0=[scale, flame_head_model.trans, flame_head_model.pose[np.hstack((np.arange(3), np.arange(6,9)))], flame_head_model.betas])
 
+    # v_out = (flame_head_model.r - flame_head_model.trans)/scale.r
     v_out = flame_head_model.r/scale.r
+    v_out[:, 2] -= (flame_head_model.trans[2] / scale.r)
+    
     # Mesh(v_out, flame_head_model.f).write_obj(FLAME_out_fname)
 
     facefp_mesh = load_facefp_head_model(v_out, flame_head_model.f, tp)

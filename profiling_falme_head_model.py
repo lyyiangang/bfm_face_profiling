@@ -66,7 +66,7 @@ class ImageRenderer(nn.Module):
 
 if __name__ == "__main__":
     fitted_head = 'outputs/fitted_flame_head_model.npy'
-    aug_angles = torch.Tensor([0, -50, 0])[None,...]/180.0 * np.pi # rotation angles xyz
+    aug_angles = torch.Tensor([30, 30, -40])[None,...]/180.0 * np.pi # rotation angles xyz
 
     meta_data = np.load(fitted_head, allow_pickle=True)[()] 
     img = cv2.imread(meta_data['img_name'])
@@ -80,8 +80,6 @@ if __name__ == "__main__":
     head_vertices[:, :, 0] -= image_size / 2
     head_vertices[:, :, 1] += image_size / 2
     head_vertices[:, :, :] /= image_size / 2
-    # import ipdb;ipdb.set_trace()
-    head_vertices[:, :, 2:] -= head_vertices[:, :, 2].mean()
 
     # R = pytorch3d.transforms.euler_angles_to_matrix(cam[:,:3], "XYZ")
     # print(f'cam:{cam}, R:{R}')
